@@ -13,7 +13,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm exec wrangler dev --config .cloudflare/deploy/config.json --port 4173 --ip 127.0.0.1",
+    command: "pnpm exec cf dev -- --port 4173 --ip 127.0.0.1",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
