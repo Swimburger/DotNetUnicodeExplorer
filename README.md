@@ -39,7 +39,7 @@ dotnet run
 
 ```sh
 pnpm install
-dotnet test --configuration Release
+dotnet test tests/DotNetUnicodeExplorer.Tests/DotNetUnicodeExplorer.Tests.csproj --configuration Release
 pnpm run build:cloudflare
 pnpm exec playwright install chromium
 pnpm run test:e2e

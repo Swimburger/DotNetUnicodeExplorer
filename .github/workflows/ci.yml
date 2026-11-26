@@ -38,7 +38,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Restore .NET dependencies
-        run: dotnet restore
+        run: |
+          dotnet restore DotNetUnicodeExplorer.csproj
+          dotnet restore tests/DotNetUnicodeExplorer.Tests/DotNetUnicodeExplorer.Tests.csproj
 
       - name: Run .NET tests
         run: dotnet test tests/DotNetUnicodeExplorer.Tests/DotNetUnicodeExplorer.Tests.csproj --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false
@@ -69,5 +71,5 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
