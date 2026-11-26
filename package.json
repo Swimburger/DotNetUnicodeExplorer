@@ -1,0 +1,23 @@
+{
+  "name": "dotnet-unicode-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.23.0",
+  "scripts": {
+    "build": "./build.sh",
+    "build:cloudflare": "pnpm run build && cf build",
+    "build:cloudflare:prebuilt": "cf build",
+    "deploy": "pnpm run build:cloudflare && cf deploy --prebuilt",
+    "test": "dotnet test tests/DotNetUnicodeExplorer.Tests/DotNetUnicodeExplorer.Tests.csproj --configuration Release",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "cf": "1.0.0-rc.4",
+    "wrangler": "4.167.0"
+  }
+}

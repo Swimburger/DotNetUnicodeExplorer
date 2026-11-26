@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+node_modules/
+.cloudflare/
+.wrangler/
+playwright-report/
+test-results/
+.DS_Store
+*.user
+*.suo

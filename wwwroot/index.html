@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111821" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content=".NET String &amp; Unicode Explorer" />
+    <meta property="og:description" content="See how .NET represents text as grapheme clusters, Rune values, UTF-16 code units, encoded bytes, and normalization forms." />
+    <meta property="og:url" content="https://unicode.swimburger.net/" />
+    <meta property="og:image" content="https://unicode.swimburger.net/assets/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <base href="/" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+    <div id="app">
+        <div class="initial-loading">
+            <svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path fill="currentColor" d="M8 14c0-6 7-10 16-10s16 4 16 10H8Zm-2 5h36v6H6v-6Zm2 11h32c0 9-7 14-16 14S8 39 8 30Z"/></svg>
+            <p>Loading the .NET Unicode explorer…</p>
+            <progress aria-label="Loading application"></progress>
+        </div>
+    </div>
+    <script src="app.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+</html>

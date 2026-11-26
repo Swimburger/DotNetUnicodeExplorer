@@ -1,0 +1,412 @@
+@inject IJSRuntime JS
+
+<HeadContent>
+    <title>.NET String &amp; Unicode Explorer</title>
+    <meta name="description" content="Inspect .NET strings as grapheme clusters, Rune values, UTF-16 code units, encoded bytes, and Unicode normalization forms in your browser." />
+    <link rel="canonical" href="https://unicode.swimburger.net/" />
+</HeadContent>
+
+<a class="skip-link" href="#unicode-explorer-heading">Skip to the explorer</a>
+
+<header class="site-header">
+    <div>
+        <a class="brand" href="https://swimburger.net/" aria-label="Swimburger home">
+            <svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
+                <path fill="currentColor" d="M8 14c0-6 7-10 16-10s16 4 16 10H8Zm-2 5h36v6H6v-6Zm2 11h32c0 9-7 14-16 14S8 39 8 30Z"/>
+                <path fill="var(--brand-accent)" d="M5 25h38l-6 5H11l-6-5Z"/>
+            </svg>
+            <span>Swimburger tools</span>
+        </a>
+    </div>
+    <nav aria-label="Page sections">
+        <a href="#inspect">Inspect</a>
+        <a href="#normalize">Normalize</a>
+        <a href="#reference">Reference</a>
+    </nav>
+</header>
+
+<main>
+    <section class="hero" aria-labelledby="unicode-explorer-heading">
+        <p class="eyebrow">Runs locally with .NET 11 WebAssembly</p>
+        <h1 id="unicode-explorer-heading" tabindex="-1">.NET String &amp; <span>Unicode Explorer</span></h1>
+        <p class="lede">Paste text and see exactly what .NET sees: grapheme clusters, Unicode scalar values, UTF-16 code units, encoded bytes, and normalization forms.</p>
+    </section>
+
+    <section id="inspect" class="workbench" aria-labelledby="input-heading">
+        <div class="workbench-heading">
+            <div>
+                <p class="section-kicker">One string, five views</p>
+                <h2 id="input-heading">Inspect a .NET string</h2>
+            </div>
+            <label class="example-picker" for="example-picker">
+                <span>Load an example</span>
+                <select id="example-picker" name="example" @onchange="LoadExample">
+                    @foreach (var example in Examples)
+                    {
+                        <option value="@example.Key" selected="@(example.Key == selectedExample)">@example.Label</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        <form class="input-form" aria-labelledby="input-heading" @onsubmit="AnalyzeSubmitted">
+            <fieldset class="mode-picker">
+                <legend>Input mode</legend>
+                <label><input type="radio" name="input-mode" value="text" checked="@(!escapedMode)" @onchange="UseTextMode" /> Text</label>
+                <label><input type="radio" name="input-mode" value="escaped" checked="@escapedMode" @onchange="UseEscapedMode" /> C# escapes</label>
+            </fieldset>
+            <div class="input-field">
+                <label for="string-input">@(escapedMode ? "C# escaped string contents" : "Text to inspect")</label>
+                <span id="input-hint" class="hint">@(escapedMode ? @"Enter string contents such as e\u0301 or \U0001F970. Do not include surrounding quotes." : "Text stays on this device and is analyzed by .NET in your browser.")</span>
+                <textarea id="string-input" name="input" rows="5" spellcheck="false" autocorrect="off" autocapitalize="none"
+                          aria-describedby="@(showError ? "input-hint input-error" : "input-hint")"
+                          aria-invalid="@(showError ? "true" : "false")"
+                          maxlength="4096" value="@input" @oninput="InputChanged" @onblur="InputBlurred"></textarea>
+                @if (showError)
+                {
+                    <p id="input-error" class="validation-error"><strong>Error:</strong> @parseError</p>
+                }
+            </div>
+            <div class="input-actions">
+                <button type="submit" class="primary">Analyze string</button>
+                <button type="button" @onclick="Clear">Clear</button>
+                <button type="button" @onclick="CopyEscaped" disabled="@(analysis.Value.Length == 0)">Copy escaped C#</button>
+            </div>
+        </form>
+
+        <p class="copy-status" role="status" aria-live="polite">@copyStatus</p>
+
+        <section class="rendered-panel" aria-labelledby="rendered-heading">
+            <div>
+                <h3 id="rendered-heading">Rendered text</h3>
+                <p>What the browser displays. Whitespace and invisible code points may not be apparent here.</p>
+            </div>
+            <pre tabindex="0" role="region" aria-labelledby="rendered-heading"><code>@(analysis.Value.Length == 0 ? "(empty string)" : analysis.Value)</code></pre>
+        </section>
+
+        <dl class="summary-grid" aria-label="String summary">
+            <div><dt><code>string.Length</code></dt><dd>@analysis.Value.Length</dd><span>UTF-16 code units</span></div>
+            <div><dt>Text elements</dt><dd>@analysis.TextElements.Count</dd><span>Grapheme clusters</span></div>
+            <div><dt><code>Rune</code> count</dt><dd>@analysis.Runes.Count</dd><span>Scalar values</span></div>
+            <div><dt>UTF-8 bytes</dt><dd>@Utf8ByteCount</dd><span>Encoded size</span></div>
+            <div><dt>Well-formed UTF-16</dt><dd>@(analysis.IsWellFormedUtf16 ? "Yes" : "No")</dd><span>@(analysis.IsWellFormedUtf16 ? "Every surrogate is paired" : "Contains an unpaired surrogate")</span></div>
+        </dl>
+
+        @if (analysis.Value.Length == 0)
+        {
+            <p class="empty-state">Enter text or load an example to inspect its .NET representation.</p>
+        }
+        else
+        {
+            <section class="result-section" aria-labelledby="elements-heading">
+                <div class="result-heading">
+                    <div><p class="result-number">01</p><h3 id="elements-heading">Text elements</h3><p>Extended grapheme clusters reported by <code>StringInfo.ParseCombiningCharacters</code>.</p></div>
+                    <span class="count-badge">@analysis.TextElements.Count total</span>
+                </div>
+                <div class="element-strip" aria-label="Text element selector">
+                    @foreach (var element in analysis.TextElements)
+                    {
+                        <button type="button" class="element-chip @(selectedElement == element.Index ? "selected" : null)"
+                                aria-pressed="@(selectedElement == element.Index)" @onclick="() => SelectElement(element.Index)">
+                            <span class="element-visual">@element.Value</span>
+                            <span>#@element.Index</span>
+                        </button>
+                    }
+                </div>
+                <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="elements-caption">
+                    <table>
+                        <caption id="elements-caption">Text elements and their UTF-16 ranges</caption>
+                        <thead><tr><th scope="col">Element</th><th scope="col">Rendered</th><th scope="col">Escaped</th><th scope="col">UTF-16 range</th><th scope="col">Runes</th></tr></thead>
+                        <tbody>
+                        @foreach (var element in analysis.TextElements)
+                        {
+                            <tr class="@(selectedElement == element.Index ? "selected-row" : null)">
+                                <th scope="row">@element.Index</th><td class="large-glyph">@element.Value</td><td><code>@element.Escaped</code></td>
+                                <td>@element.Utf16Start..@(element.Utf16Start + element.Utf16Length - 1)</td><td>@element.RuneCount</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="result-section" aria-labelledby="runes-heading">
+                <div class="result-heading">
+                    <div><p class="result-number">02</p><h3 id="runes-heading">Unicode scalar values</h3><p><code>Rune</code> values enumerate code points without splitting surrogate pairs.</p></div>
+                    <span class="count-badge">@analysis.Runes.Count total</span>
+                </div>
+                <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="runes-caption">
+                    <table>
+                        <caption id="runes-caption">Rune values in the string</caption>
+                        <thead><tr><th scope="col">Rune</th><th scope="col">Rendered</th><th scope="col">Code point</th><th scope="col">Category</th><th scope="col">UTF-16</th><th scope="col">UTF-8 bytes</th></tr></thead>
+                        <tbody>
+                        @foreach (var rune in analysis.Runes)
+                        {
+                            <tr class="@(IsSelected(rune.Utf16Start, rune.Utf16Length) ? "selected-row" : null)">
+                                <th scope="row">@rune.Index</th><td class="large-glyph">@rune.Value</td><td><code>@rune.CodePoint</code></td>
+                                <td>@SplitPascalCase(rune.Category.ToString())</td><td>@rune.Utf16Start + @rune.Utf16Length</td><td><code>@rune.Utf8Hex</code></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="result-section" aria-labelledby="code-units-heading">
+                <div class="result-heading">
+                    <div><p class="result-number">03</p><h3 id="code-units-heading">UTF-16 code units</h3><p>Every position addressable by a .NET <code>string</code> index or <code>char</code>.</p></div>
+                    <span class="count-badge">@analysis.CodeUnits.Count total</span>
+                </div>
+                <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="code-units-caption">
+                    <table>
+                        <caption id="code-units-caption">UTF-16 code units in the string</caption>
+                        <thead><tr><th scope="col">Index</th><th scope="col">Display</th><th scope="col">Escaped</th><th scope="col">Value</th><th scope="col">Kind</th></tr></thead>
+                        <tbody>
+                        @foreach (var unit in analysis.CodeUnits)
+                        {
+                            <tr class="@(IsSelected(unit.Index, 1) ? "selected-row" : null)">
+                                <th scope="row">@unit.Index</th><td class="large-glyph">@unit.Display</td><td><code>@unit.Escaped</code></td><td><code>@unit.Hex</code></td><td>@unit.Kind</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="result-section" aria-labelledby="encoding-heading">
+                <div class="result-heading">
+                    <div><p class="result-number">04</p><h3 id="encoding-heading">Encoded bytes</h3><p>The same .NET string serialized using the built-in Unicode encodings, without a byte-order mark.</p></div>
+                </div>
+                <div class="encoding-grid">
+                    @foreach (var encoding in analysis.Encodings)
+                    {
+                        <article class="encoding-card">
+                            <div><h4>@encoding.Name</h4><span>@encoding.ByteCount bytes</span></div>
+                            <code>@encoding.Hex</code>
+                            <button type="button" @onclick="() => CopyEncoding(encoding)">Copy <span class="visually-hidden">@encoding.Name bytes</span></button>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </section>
+
+    <section id="normalize" class="page-section" aria-labelledby="normalization-heading">
+        <div class="section-heading">
+            <p class="section-kicker">Equivalent text, different bytes</p>
+            <h2 id="normalization-heading">Unicode normalization</h2>
+            <p>Compare all four <code>string.Normalize</code> forms and see their platform status. “Changed” means the result differs ordinally from the input.</p>
+        </div>
+        <div class="normalization-grid">
+            @foreach (var form in analysis.Normalizations)
+            {
+                <article class="normalization-card">
+                    <header><div><h3>@form.ShortName</h3><p>@form.Name</p></div><span class="change-badge @(!form.Supported || form.Changed ? "changed" : null)">@(!form.Supported ? "Unavailable" : form.Changed ? "Changed" : "Unchanged")</span></header>
+                    @if (form.Supported)
+                    {
+                        <pre tabindex="0" role="region" aria-label="@form.ShortName normalized value"><code>@(form.Value.Length == 0 ? "(empty string)" : form.Value)</code></pre>
+                        <dl><div><dt>Escaped</dt><dd><code>@form.Escaped</code></dd></div><div><dt>UTF-16</dt><dd>@form.Utf16Length</dd></div><div><dt>Runes</dt><dd>@form.RuneCount</dd></div><div><dt>UTF-8</dt><dd>@form.Utf8ByteCount bytes</dd></div></dl>
+                    }
+                    else
+                    {
+                        <p class="unsupported-note"><strong>Not available in this .NET runtime.</strong> @form.Note</p>
+                    }
+                    <button type="button" @onclick="() => CopyNormalization(form)" disabled="@(!form.Supported)">Copy escaped value</button>
+                </article>
+            }
+        </div>
+    </section>
+
+    <section class="page-section code-section" aria-labelledby="code-heading">
+        <div class="section-heading"><p class="section-kicker">Take it back to your project</p><h2 id="code-heading">Equivalent C#</h2></div>
+        <div class="code-block">
+            <button type="button" class="code-copy" @onclick="CopyCode">Copy C#</button>
+            <pre tabindex="0" role="region" aria-labelledby="code-heading"><code>@CodeSnippet</code></pre>
+        </div>
+    </section>
+
+    <section id="reference" class="page-section reference-section" aria-labelledby="reference-heading">
+        <div class="section-heading"><p class="section-kicker">Quick reference</p><h2 id="reference-heading">Which .NET abstraction should I use?</h2><p>A displayed “character” can mean several different units. Choose the API that matches the job.</p></div>
+        <div class="table-wrapper reference-table" tabindex="0" role="region" aria-labelledby="reference-caption">
+            <table>
+                <caption id="reference-caption">.NET string and Unicode abstractions</caption>
+                <thead><tr><th scope="col">Concept</th><th scope="col">.NET API</th><th scope="col">What it represents</th><th scope="col">Use it for</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">UTF-16 code unit</th><td><code>char</code>, <code>string.Length</code></td><td>One 16-bit value</td><td>Index compatibility and low-level UTF-16 work</td></tr>
+                    <tr><th scope="row">Unicode scalar value</th><td><code>Rune</code>, <code>EnumerateRunes()</code></td><td>One valid Unicode code point</td><td>Character classification and code-point processing</td></tr>
+                    <tr><th scope="row">Text element</th><td><code>StringInfo</code></td><td>One extended grapheme cluster</td><td>User-perceived characters, cursor movement, and truncation</td></tr>
+                    <tr><th scope="row">Encoded bytes</th><td><code>Encoding.UTF8</code> and related APIs</td><td>A serialized byte sequence</td><td>Files, protocols, storage, and byte limits</td></tr>
+                    <tr><th scope="row">Normalized string</th><td><code>string.Normalize()</code></td><td>A canonical or compatibility representation</td><td>Consistent representation before an appropriate comparison</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="docs-links">
+            <a href="https://learn.microsoft.com/dotnet/standard/base-types/character-encoding-introduction">Character encoding in .NET</a>
+            <a href="https://learn.microsoft.com/dotnet/api/system.text.rune">Rune API reference</a>
+            <a href="https://learn.microsoft.com/dotnet/api/system.globalization.stringinfo">StringInfo API reference</a>
+            <a href="https://learn.microsoft.com/dotnet/api/system.string.normalize">String.Normalize API reference</a>
+        </div>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div>
+        <p><strong>Private by design.</strong> Your input never leaves this browser. Analysis runs locally with .NET 11 WebAssembly.</p>
+        <nav aria-label="Footer"><a href="https://swimburger.net/privacy">Privacy policy</a><a href="https://github.com/Swimburger/DotNetUnicodeExplorer">Source code</a><a href="https://swimburger.net/">swimburger.net</a></nav>
+        <small>Unicode segmentation and normalization results can vary with the Unicode and ICU data used by the runtime. .NET browser targets don't support compatibility normalization (NFKC/NFKD); the explorer reports that platform limitation. Formal Unicode character names are intentionally not included.</small>
+    </div>
+</footer>
+
+<div id="blazor-error-ui" role="alert">
+    An unexpected error occurred. <a href="." class="reload">Reload</a>
+    <button type="button" class="dismiss" aria-label="Dismiss error message">×</button>
+</div>
+
+@code {
+    private sealed record Example(string Key, string Label, string Value, bool Escaped = false);
+
+    private static readonly Example[] Examples =
+    [
+        new("accent", "Composed and combining accents", @"Café | Cafe\u0301", true),
+        new("emoji", "Emoji surrogate pair", "A🥰B"),
+        new("family", "Family emoji (ZWJ sequence)", "👨‍👩‍👧‍👦"),
+        new("flag", "Belgian flag", "🇧🇪"),
+        new("skin-tone", "Emoji with skin tone", "👍🏽"),
+        new("devanagari", "Devanagari conjunct", "नमस्ते"),
+        new("compatibility", "Compatibility forms", "① Ⅳ ﬁ Ａ"),
+        new("whitespace", "Whitespace and controls", @"first\tsecond\nthird", true)
+    ];
+
+    private string input = Examples[0].Value;
+    private bool escapedMode = Examples[0].Escaped;
+    private string selectedExample = Examples[0].Key;
+    private string? parseError;
+    private bool hasBlurred;
+    private bool submitted;
+    private string copyStatus = string.Empty;
+    private int selectedElement;
+    private UnicodeAnalysis analysis = UnicodeAnalyzer.Analyze("Café | Cafe\u0301");
+
+    private bool showError => parseError is not null && (hasBlurred || submitted);
+    private int Utf8ByteCount => analysis.Encodings.FirstOrDefault(item => item.Name == "UTF-8")?.ByteCount ?? 0;
+    private TextElementInfo? SelectedTextElement => analysis.TextElements.ElementAtOrDefault(selectedElement);
+    private string CodeSnippet => $$"""
+        using System.Globalization;
+        using System.Text;
+
+        string value = "{{analysis.Escaped}}";
+
+        int utf16CodeUnits = value.Length;
+        int scalarValues = 0;
+        foreach (Rune _ in value.EnumerateRunes()) scalarValues++;
+        int textElements = StringInfo.ParseCombiningCharacters(value).Length;
+        byte[] utf8 = Encoding.UTF8.GetBytes(value);
+
+        string nfc = value.Normalize(NormalizationForm.FormC);
+        string nfd = value.Normalize(NormalizationForm.FormD);
+        """;
+
+    protected override void OnInitialized() => Reanalyze();
+
+    private void InputChanged(ChangeEventArgs args)
+    {
+        input = args.Value?.ToString() ?? string.Empty;
+        selectedExample = string.Empty;
+        submitted = false;
+        Reanalyze();
+    }
+
+    private void InputBlurred() => hasBlurred = true;
+
+    private void AnalyzeSubmitted()
+    {
+        submitted = true;
+        hasBlurred = true;
+        Reanalyze();
+    }
+
+    private void UseTextMode()
+    {
+        escapedMode = false;
+        input = analysis.Value;
+        ResetInteraction();
+        Reanalyze();
+    }
+
+    private void UseEscapedMode()
+    {
+        escapedMode = true;
+        input = analysis.Escaped;
+        ResetInteraction();
+        Reanalyze();
+    }
+
+    private void LoadExample(ChangeEventArgs args)
+    {
+        var key = args.Value?.ToString() ?? Examples[0].Key;
+        var example = Examples.First(item => item.Key == key);
+        selectedExample = example.Key;
+        input = example.Value;
+        escapedMode = example.Escaped;
+        ResetInteraction();
+        Reanalyze();
+    }
+
+    private void Clear()
+    {
+        input = string.Empty;
+        selectedExample = string.Empty;
+        ResetInteraction();
+        Reanalyze();
+    }
+
+    private void ResetInteraction()
+    {
+        hasBlurred = false;
+        submitted = false;
+        copyStatus = string.Empty;
+        selectedElement = 0;
+    }
+
+    private void Reanalyze()
+    {
+        var result = escapedMode ? UnicodeAnalyzer.ParseEscaped(input) : ParseResult.Ok(input);
+        parseError = result.Error;
+        if (result.Success)
+        {
+            analysis = UnicodeAnalyzer.Analyze(result.Value);
+            if (selectedElement >= analysis.TextElements.Count) selectedElement = 0;
+        }
+    }
+
+    private void SelectElement(int index) => selectedElement = index;
+
+    private bool IsSelected(int start, int length)
+    {
+        var selected = SelectedTextElement;
+        if (selected is null) return false;
+        var end = start + length;
+        var selectedEnd = selected.Utf16Start + selected.Utf16Length;
+        return start < selectedEnd && end > selected.Utf16Start;
+    }
+
+    private async Task CopyEscaped() => await Copy($"\"{analysis.Escaped}\"", "escaped C# string");
+    private async Task CopyEncoding(DotNetUnicodeExplorer.Core.EncodingInfo encoding) => await Copy(encoding.Hex, $"{encoding.Name} bytes");
+    private async Task CopyNormalization(NormalizationInfo form) => await Copy(form.Escaped, $"{form.ShortName} escaped value");
+    private async Task CopyCode() => await Copy(CodeSnippet, "C# example");
+
+    private async Task Copy(string text, string label)
+    {
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("unicodeUi.copyText", text);
+            copyStatus = copied ? $"Copied {label}." : $"Copy failed for {label}. Select the value and copy it manually.";
+        }
+        catch (JSException)
+        {
+            copyStatus = $"Copy failed for {label}. Select the value and copy it manually.";
+        }
+    }
+
+    private static string SplitPascalCase(string value) => string.Concat(value.Select((character, index) => index > 0 && char.IsUpper(character) ? $" {character}" : character.ToString()));
+}

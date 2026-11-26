@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <CheckSdkVulnerabilities>true</CheckSdkVulnerabilities>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+</Project>
