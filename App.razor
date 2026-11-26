@@ -107,7 +107,7 @@
                     @foreach (var element in analysis.TextElements)
                     {
                         <button type="button" class="element-chip @(selectedElement == element.Index ? "selected" : null)"
-                                aria-pressed="@(selectedElement == element.Index)" @onclick="() => SelectElement(element.Index)">
+                                aria-pressed="@(selectedElement == element.Index ? "true" : "false")" @onclick="() => SelectElement(element.Index)">
                             <span class="element-visual">@element.Value</span>
                             <span>#@element.Index</span>
                         </button>

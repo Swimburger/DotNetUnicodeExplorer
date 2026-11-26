@@ -30,11 +30,11 @@ test("parses C# escapes and defers errors until interaction completes", async ({
   await page.getByLabel("C# escapes").check();
   const input = page.getByLabel("C# escaped string contents");
   await input.fill("\\u12");
-  await expect(page.getByText(/^Error:/)).toHaveCount(0);
+  await expect(page.locator("#input-error")).toHaveCount(0);
   await input.blur();
-  await expect(page.getByText(/^Error:/)).toContainText("exactly 4 hexadecimal digits");
+  await expect(page.locator("#input-error")).toContainText("exactly 4 hexadecimal digits");
   await input.fill("\\U0001F970");
-  await expect(page.getByText(/^Error:/)).toHaveCount(0);
+  await expect(page.locator("#input-error")).toHaveCount(0);
   await expect(page.getByRole("table", { name: "Rune values in the string" })).toContainText("U+1F970");
 });
 
@@ -48,6 +48,7 @@ test("copies with visible accessible feedback", async ({ page, context }) => {
 test("is responsive, keyboard focusable, and free of horizontal page overflow", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await load(page);
+  await page.getByLabel("Text", { exact: true }).check();
   await expect(page.getByLabel("Text to inspect")).toBeVisible();
   await page.getByRole("button", { name: "Analyze string" }).focus();
   await expect(page.getByRole("button", { name: "Analyze string" })).toBeFocused();
