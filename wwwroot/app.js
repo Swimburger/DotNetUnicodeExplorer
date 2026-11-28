@@ -14,3 +14,9 @@ document.addEventListener("click", (event) => {
     document.querySelector("#blazor-error-ui")?.setAttribute("hidden", "");
   }
 });
+
+Blazor.start({
+  loadBootResource(type, _name, defaultUri) {
+    return type === "dotnetjs" ? `${defaultUri}?v=4306db7` : defaultUri;
+  }
+});
