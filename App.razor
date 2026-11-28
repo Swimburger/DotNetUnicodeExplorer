@@ -1,42 +1,28 @@
 @inject IJSRuntime JS
 
 <HeadContent>
-    <title>.NET String &amp; Unicode Explorer</title>
+    <title>.NET Unicode Explorer</title>
     <meta name="description" content="Inspect .NET strings as grapheme clusters, Rune values, UTF-16 code units, encoded bytes, and Unicode normalization forms in your browser." />
     <link rel="canonical" href="https://unicode.swimburger.net/" />
 </HeadContent>
 
-<a class="skip-link" href="#unicode-explorer-heading">Skip to the explorer</a>
+<a class="skip-link" href="#inspect">Skip to the explorer</a>
 
-<header class="site-header">
-    <div>
-        <a class="brand" href="https://swimburger.net/" aria-label="Swimburger home">
-            <svg viewBox="0 0 48 48" width="38" height="38" aria-hidden="true">
-                <path fill="currentColor" d="M8 14c0-6 7-10 16-10s16 4 16 10H8Zm-2 5h36v6H6v-6Zm2 11h32c0 9-7 14-16 14S8 39 8 30Z"/>
-                <path fill="var(--brand-accent)" d="M5 25h38l-6 5H11l-6-5Z"/>
-            </svg>
-            <span>Swimburger tools</span>
-        </a>
+<header class="app-header">
+    <div class="container header-content">
+        <div>
+            <h1 id="unicode-explorer-heading">.NET Unicode Explorer</h1>
+            <p>Inspect text as grapheme clusters, Unicode scalar values, UTF-16 code units, and encoded bytes.</p>
+        </div>
+        <a class="source-link" href="https://github.com/Swimburger/DotNetUnicodeExplorer">Source</a>
     </div>
-    <nav aria-label="Page sections">
-        <a href="#inspect">Inspect</a>
-        <a href="#normalize">Normalize</a>
-        <a href="#reference">Reference</a>
-    </nav>
 </header>
 
 <main>
-    <section class="hero" aria-labelledby="unicode-explorer-heading">
-        <p class="eyebrow">Runs locally with .NET 11 WebAssembly</p>
-        <h1 id="unicode-explorer-heading" tabindex="-1">.NET String &amp; <span>Unicode Explorer</span></h1>
-        <p class="lede">Paste text and see exactly what .NET sees: grapheme clusters, Unicode scalar values, UTF-16 code units, encoded bytes, and normalization forms.</p>
-    </section>
-
     <section id="inspect" class="workbench" aria-labelledby="input-heading">
         <div class="workbench-heading">
             <div>
-                <p class="section-kicker">One string, five views</p>
-                <h2 id="input-heading">Inspect a .NET string</h2>
+                <h2 id="input-heading">Text to inspect</h2>
             </div>
             <label class="example-picker" for="example-picker">
                 <span>Load an example</span>
@@ -57,7 +43,7 @@
             </fieldset>
             <div class="input-field">
                 <label for="string-input">@(escapedMode ? "C# escaped string contents" : "Text to inspect")</label>
-                <span id="input-hint" class="hint">@(escapedMode ? @"Enter string contents such as e\u0301 or \U0001F970. Do not include surrounding quotes." : "Text stays on this device and is analyzed by .NET in your browser.")</span>
+                <span id="input-hint" class="hint">@(escapedMode ? @"Enter contents such as e\u0301 or \U0001F970, without surrounding quotes." : "Paste or type any text.")</span>
                 <textarea id="string-input" name="input" rows="5" spellcheck="false" autocorrect="off" autocapitalize="none"
                           aria-describedby="@(showError ? "input-hint input-error" : "input-hint")"
                           aria-invalid="@(showError ? "true" : "false")"
@@ -100,8 +86,7 @@
         {
             <section class="result-section" aria-labelledby="elements-heading">
                 <div class="result-heading">
-                    <div><p class="result-number">01</p><h3 id="elements-heading">Text elements</h3><p>Extended grapheme clusters reported by <code>StringInfo.ParseCombiningCharacters</code>.</p></div>
-                    <span class="count-badge">@analysis.TextElements.Count total</span>
+                    <div><h3 id="elements-heading">Text elements <span class="count">(@analysis.TextElements.Count)</span></h3><p>Grapheme clusters reported by <code>StringInfo.ParseCombiningCharacters</code>.</p></div>
                 </div>
                 <div class="element-strip" aria-label="Text element selector">
                     @foreach (var element in analysis.TextElements)
@@ -132,8 +117,7 @@
 
             <section class="result-section" aria-labelledby="runes-heading">
                 <div class="result-heading">
-                    <div><p class="result-number">02</p><h3 id="runes-heading">Unicode scalar values</h3><p><code>Rune</code> values enumerate code points without splitting surrogate pairs.</p></div>
-                    <span class="count-badge">@analysis.Runes.Count total</span>
+                    <div><h3 id="runes-heading">Unicode scalar values <span class="count">(@analysis.Runes.Count)</span></h3><p><code>Rune</code> values enumerate code points without splitting surrogate pairs.</p></div>
                 </div>
                 <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="runes-caption">
                     <table>
@@ -154,8 +138,7 @@
 
             <section class="result-section" aria-labelledby="code-units-heading">
                 <div class="result-heading">
-                    <div><p class="result-number">03</p><h3 id="code-units-heading">UTF-16 code units</h3><p>Every position addressable by a .NET <code>string</code> index or <code>char</code>.</p></div>
-                    <span class="count-badge">@analysis.CodeUnits.Count total</span>
+                    <div><h3 id="code-units-heading">UTF-16 code units <span class="count">(@analysis.CodeUnits.Count)</span></h3><p>Every position addressable by a .NET <code>string</code> index or <code>char</code>.</p></div>
                 </div>
                 <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="code-units-caption">
                     <table>
@@ -173,9 +156,10 @@
                 </div>
             </section>
 
-            <section class="result-section" aria-labelledby="encoding-heading">
+            <details class="utility-details result-section">
+                <summary id="encoding-heading">Encoded bytes</summary>
                 <div class="result-heading">
-                    <div><p class="result-number">04</p><h3 id="encoding-heading">Encoded bytes</h3><p>The same .NET string serialized using the built-in Unicode encodings, without a byte-order mark.</p></div>
+                    <p>The same .NET string encoded without a byte-order mark.</p>
                 </div>
                 <div class="encoding-grid">
                     @foreach (var encoding in analysis.Encodings)
@@ -187,14 +171,13 @@
                         </article>
                     }
                 </div>
-            </section>
+            </details>
         }
     </section>
 
-    <section id="normalize" class="page-section" aria-labelledby="normalization-heading">
+    <details id="normalize" class="page-section utility-details">
+        <summary id="normalization-heading">Unicode normalization</summary>
         <div class="section-heading">
-            <p class="section-kicker">Equivalent text, different bytes</p>
-            <h2 id="normalization-heading">Unicode normalization</h2>
             <p>Compare all four <code>string.Normalize</code> forms and see their platform status. “Changed” means the result differs ordinally from the input.</p>
         </div>
         <div class="normalization-grid">
@@ -215,18 +198,19 @@
                 </article>
             }
         </div>
-    </section>
+    </details>
 
-    <section class="page-section code-section" aria-labelledby="code-heading">
-        <div class="section-heading"><p class="section-kicker">Take it back to your project</p><h2 id="code-heading">Equivalent C#</h2></div>
+    <details class="page-section utility-details code-section">
+        <summary id="code-heading">Equivalent C#</summary>
         <div class="code-block">
             <button type="button" class="code-copy" @onclick="CopyCode">Copy C#</button>
             <pre tabindex="0" role="region" aria-labelledby="code-heading"><code>@CodeSnippet</code></pre>
         </div>
-    </section>
+    </details>
 
-    <section id="reference" class="page-section reference-section" aria-labelledby="reference-heading">
-        <div class="section-heading"><p class="section-kicker">Quick reference</p><h2 id="reference-heading">Which .NET abstraction should I use?</h2><p>A displayed “character” can mean several different units. Choose the API that matches the job.</p></div>
+    <details id="reference" class="page-section utility-details reference-section">
+        <summary id="reference-heading">.NET Unicode quick reference</summary>
+        <div class="section-heading"><p>A displayed “character” can mean several different units. Choose the API that matches the job.</p></div>
         <div class="table-wrapper reference-table" tabindex="0" role="region" aria-labelledby="reference-caption">
             <table>
                 <caption id="reference-caption">.NET string and Unicode abstractions</caption>
@@ -246,12 +230,12 @@
             <a href="https://learn.microsoft.com/dotnet/api/system.globalization.stringinfo">StringInfo API reference</a>
             <a href="https://learn.microsoft.com/dotnet/api/system.string.normalize">String.Normalize API reference</a>
         </div>
-    </section>
+    </details>
 </main>
 
 <footer class="site-footer">
     <div>
-        <p><strong>Private by design.</strong> Your input never leaves this browser. Analysis runs locally with .NET 11 WebAssembly.</p>
+        <p>Runs locally in your browser with .NET WebAssembly.</p>
         <nav aria-label="Footer"><a href="https://swimburger.net/privacy">Privacy policy</a><a href="https://github.com/Swimburger/DotNetUnicodeExplorer">Source code</a><a href="https://swimburger.net/">swimburger.net</a></nav>
         <small>Unicode segmentation and normalization results can vary with the Unicode and ICU data used by the runtime. .NET browser targets don't support compatibility normalization (NFKC/NFKD); the explorer reports that platform limitation. Formal Unicode character names are intentionally not included.</small>
     </div>

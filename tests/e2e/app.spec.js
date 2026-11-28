@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 async function load(page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: ".NET String & Unicode Explorer" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: ".NET Unicode Explorer" })).toBeVisible({ timeout: 60_000 });
 }
 
 test("explains one string through related .NET views", async ({ page }) => {
@@ -11,8 +11,11 @@ test("explains one string through related .NET views", async ({ page }) => {
   await expect(page.getByRole("table", { name: "Text elements and their UTF-16 ranges" })).toBeVisible();
   await expect(page.getByRole("table", { name: "Rune values in the string" })).toBeVisible();
   await expect(page.getByRole("table", { name: "UTF-16 code units in the string" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Encoded bytes" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Unicode normalization" })).toBeVisible();
+  await page.locator("#encoding-heading").click();
+  await expect(page.locator(".encoding-grid")).toBeVisible();
+  await page.getByText("Unicode normalization", { exact: true }).click();
+  await expect(page.locator(".normalization-grid")).toBeVisible();
+  await page.getByText(".NET Unicode quick reference", { exact: true }).click();
   await expect(page.getByRole("table", { name: ".NET string and Unicode abstractions" })).toBeVisible();
 });
 
@@ -49,7 +52,7 @@ test("is responsive, keyboard focusable, and free of horizontal page overflow", 
   await page.setViewportSize({ width: 375, height: 812 });
   await load(page);
   await page.getByLabel("Text", { exact: true }).check();
-  await expect(page.getByLabel("Text to inspect")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Text to inspect" })).toBeVisible();
   await page.getByRole("button", { name: "Analyze string" }).focus();
   await expect(page.getByRole("button", { name: "Analyze string" })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
