@@ -11,15 +11,17 @@ A visible “character” can be one UTF-16 code unit, a surrogate pair, several
 ## Features
 
 - Text and C# escaped input modes
-- Curated emoji, combining-mark, script, whitespace, and compatibility examples
-- Synchronized `StringInfo`, `Rune`, and UTF-16 views
+- Curated emoji, combining-mark, invisible-character, bidirectional-control, invalid UTF-16, and mixed-script examples
+- Synchronized `StringInfo`, `Rune`, UTF-16, and encoded-byte selection
+- Review hints for invisible/control characters, bidi controls, unpaired surrogates, noncharacters, and mixed-script confusables
 - UTF-8, UTF-16 LE/BE, and UTF-32 LE/BE byte output
 - NFC and NFD comparison, with clear NFKC/NFKD runtime support status
 - Copyable escaped strings, bytes, normalized values, and C# code
+- Fragment-based share links, <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>, and opt-in local persistence with a visible forget action
 - Responsive, semantic tables and keyboard-accessible controls
 - Static deployment on Cloudflare Workers with Brotli sidecar support
 
-Formal Unicode character names are intentionally out of scope because the .NET base class library does not expose the Unicode Character Database name property.
+The explorer names the invisible and bidirectional controls that are useful during inspection. Exhaustive formal Unicode character names remain out of scope because the .NET base class library does not expose the Unicode Character Database name property.
 
 ## Prerequisites
 
@@ -59,7 +61,7 @@ The Worker uses the custom domain `unicode.swimburger.net`, compatibility date `
 
 ## Privacy
 
-The application has no product analytics or server-side input processing. Input is evaluated entirely inside the browser by Blazor WebAssembly. Cloudflare may retain standard request metadata through Workers Logs and sampled traces, but the text entered into the explorer is never sent with those requests.
+The application has no product analytics or server-side input processing. Input is evaluated entirely inside the browser by Blazor WebAssembly. Share state is placed after the URL `#` fragment, which browsers do not send in HTTP requests or referrer headers. Remembering input is off by default; when enabled, it uses this browser's local storage and can be removed with **Forget saved work**. Cloudflare may retain standard request metadata through Workers Logs and sampled traces, but the text entered into the explorer is never sent with those requests.
 
 ## Browser runtime note
 

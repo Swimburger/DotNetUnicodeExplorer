@@ -28,7 +28,24 @@ public sealed record CodeUnitInfo(
     string Kind,
     string Escaped);
 
-public sealed record EncodingInfo(string Name, int ByteCount, string Hex);
+public sealed record EncodedByteInfo(
+    int Index,
+    byte Value,
+    string Hex,
+    int Utf16Start,
+    int Utf16Length);
+
+public sealed record EncodingInfo(
+    string Name,
+    int ByteCount,
+    string Hex,
+    IReadOnlyList<EncodedByteInfo> Bytes);
+
+public sealed record UnicodeWarning(
+    string Kind,
+    string Message,
+    int Utf16Start,
+    int Utf16Length);
 
 public sealed record NormalizationInfo(
     string ShortName,
@@ -50,7 +67,8 @@ public sealed record UnicodeAnalysis(
     IReadOnlyList<RuneInfo> Runes,
     IReadOnlyList<CodeUnitInfo> CodeUnits,
     IReadOnlyList<EncodingInfo> Encodings,
-    IReadOnlyList<NormalizationInfo> Normalizations);
+    IReadOnlyList<NormalizationInfo> Normalizations,
+    IReadOnlyList<UnicodeWarning> Warnings);
 
 public sealed record ParseResult(bool Success, string Value, string? Error)
 {

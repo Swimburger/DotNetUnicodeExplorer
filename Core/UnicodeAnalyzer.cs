@@ -8,16 +8,18 @@ public static class UnicodeAnalyzer
 {
     public static UnicodeAnalysis Analyze(string value)
     {
+        var textElements = AnalyzeTextElements(value);
         var runes = AnalyzeRunes(value);
         return new UnicodeAnalysis(
             value,
             Escape(value),
             IsWellFormedUtf16(value),
-            AnalyzeTextElements(value),
+            textElements,
             runes,
             AnalyzeCodeUnits(value),
-            AnalyzeEncodings(value),
-            AnalyzeNormalizations(value));
+            AnalyzeEncodings(value, textElements),
+            AnalyzeNormalizations(value),
+            AnalyzeWarnings(value, runes));
     }
 
     public static ParseResult ParseEscaped(string input)
@@ -175,7 +177,7 @@ public static class UnicodeAnalyzer
             Escape(character.ToString())))
         .ToArray();
 
-    private static IReadOnlyList<EncodingInfo> AnalyzeEncodings(string value)
+    private static IReadOnlyList<EncodingInfo> AnalyzeEncodings(string value, IReadOnlyList<TextElementInfo> textElements)
     {
         var encodings = new (string Name, Encoding Encoding)[]
         {
@@ -188,9 +190,103 @@ public static class UnicodeAnalyzer
         return encodings.Select(item =>
         {
             var bytes = item.Encoding.GetBytes(value);
-            return new EncodingInfo(item.Name, bytes.Length, Hex(bytes));
+            var mappedBytes = new List<EncodedByteInfo>(bytes.Length);
+            foreach (var element in textElements)
+            {
+                var elementBytes = item.Encoding.GetBytes(element.Value);
+                foreach (var value in elementBytes)
+                {
+                    mappedBytes.Add(new EncodedByteInfo(
+                        mappedBytes.Count,
+                        value,
+                        value.ToString("X2", CultureInfo.InvariantCulture),
+                        element.Utf16Start,
+                        element.Utf16Length));
+                }
+            }
+            return new EncodingInfo(item.Name, bytes.Length, Hex(bytes), mappedBytes);
         }).ToArray();
     }
+
+    private static IReadOnlyList<UnicodeWarning> AnalyzeWarnings(string value, IReadOnlyList<RuneInfo> runes)
+    {
+        var result = new List<UnicodeWarning>();
+        foreach (var rune in runes)
+        {
+            if (rune.CodePoint.StartsWith("Invalid", StringComparison.Ordinal))
+            {
+                result.Add(new("Invalid UTF-16", "Unpaired surrogate: .NET replacement encoders may substitute this value.", rune.Utf16Start, rune.Utf16Length));
+                continue;
+            }
+
+            var scalar = rune.Value.EnumerateRunes().First().Value;
+            if (IsBidiControl(scalar))
+            {
+                result.Add(new("Bidirectional control", $"{InvisibleName(scalar)} changes visual text order. Review it carefully in identifiers, paths, and source code.", rune.Utf16Start, rune.Utf16Length));
+            }
+            else if (rune.Category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+            {
+                result.Add(new("Invisible character", $"{InvisibleName(scalar)} may not be visible when rendered.", rune.Utf16Start, rune.Utf16Length));
+            }
+
+            if (IsNoncharacter(scalar))
+            {
+                result.Add(new("Unicode noncharacter", $"U+{scalar:X4} is permanently reserved as a noncharacter and should not be used for open interchange.", rune.Utf16Start, rune.Utf16Length));
+            }
+        }
+
+        var scripts = runes
+            .Select(item => item.CodePoint.StartsWith("Invalid", StringComparison.Ordinal) ? null : ScriptOf(item.Value.EnumerateRunes().First().Value))
+            .Where(item => item is not null)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (scripts.Length > 1 && scripts.Contains("Latin") && (scripts.Contains("Cyrillic") || scripts.Contains("Greek")))
+        {
+            result.Add(new("Potentially confusable text",
+                $"This value mixes {string.Join(" and ", scripts)} letters. Some glyphs can look alike; this is a review hint, not proof of spoofing.",
+                0, value.Length));
+        }
+
+        return result;
+    }
+
+    public static string InvisibleName(int scalar) => scalar switch
+    {
+        0x0000 => "NULL (U+0000)",
+        0x0009 => "CHARACTER TABULATION (U+0009)",
+        0x000A => "LINE FEED (U+000A)",
+        0x000D => "CARRIAGE RETURN (U+000D)",
+        0x00AD => "SOFT HYPHEN (U+00AD)",
+        0x061C => "ARABIC LETTER MARK (U+061C)",
+        0x200B => "ZERO WIDTH SPACE (U+200B)",
+        0x200C => "ZERO WIDTH NON-JOINER (U+200C)",
+        0x200D => "ZERO WIDTH JOINER (U+200D)",
+        0x200E => "LEFT-TO-RIGHT MARK (U+200E)",
+        0x200F => "RIGHT-TO-LEFT MARK (U+200F)",
+        0x202A => "LEFT-TO-RIGHT EMBEDDING (U+202A)",
+        0x202B => "RIGHT-TO-LEFT EMBEDDING (U+202B)",
+        0x202C => "POP DIRECTIONAL FORMATTING (U+202C)",
+        0x202D => "LEFT-TO-RIGHT OVERRIDE (U+202D)",
+        0x202E => "RIGHT-TO-LEFT OVERRIDE (U+202E)",
+        0x2060 => "WORD JOINER (U+2060)",
+        0x2066 => "LEFT-TO-RIGHT ISOLATE (U+2066)",
+        0x2067 => "RIGHT-TO-LEFT ISOLATE (U+2067)",
+        0x2068 => "FIRST STRONG ISOLATE (U+2068)",
+        0x2069 => "POP DIRECTIONAL ISOLATE (U+2069)",
+        0xFEFF => "ZERO WIDTH NO-BREAK SPACE / BOM (U+FEFF)",
+        _ => $"{(scalar <= 0x1F || scalar == 0x7F ? "CONTROL" : "FORMAT")} U+{scalar:X4}"
+    };
+
+    private static bool IsBidiControl(int scalar) => scalar is 0x061C or 0x200E or 0x200F or >= 0x202A and <= 0x202E or >= 0x2066 and <= 0x2069;
+    private static bool IsNoncharacter(int scalar) => scalar is >= 0xFDD0 and <= 0xFDEF || (scalar & 0xFFFE) == 0xFFFE;
+
+    private static string? ScriptOf(int scalar) => scalar switch
+    {
+        >= 0x0041 and <= 0x024F => "Latin",
+        >= 0x0370 and <= 0x03FF => "Greek",
+        >= 0x0400 and <= 0x052F => "Cyrillic",
+        _ => null
+    };
 
     private static IReadOnlyList<NormalizationInfo> AnalyzeNormalizations(string value)
     {

@@ -35,6 +35,15 @@
             </label>
         </div>
 
+        <div class="session-toolbar" aria-label="Session tools">
+            <button type="button" @onclick="CopyShareLink">Copy link</button>
+            <button type="button" @onclick="CopyResult" disabled="@(analysis.Value.Length == 0)">Copy result</button>
+            <button type="button" @onclick="Reset">Reset</button>
+            <label class="remember-choice"><input type="checkbox" checked="@rememberOnDevice" @onchange="RememberChanged" /> Remember on this device</label>
+            <button type="button" class="forget-button" @onclick="ForgetSavedWork" disabled="@(!rememberOnDevice)">Forget saved work</button>
+            <span class="shortcut-hint"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> analyzes</span>
+        </div>
+
         <form class="input-form" aria-labelledby="input-heading" @onsubmit="AnalyzeSubmitted">
             <fieldset class="mode-picker">
                 <legend>Input mode</legend>
@@ -55,7 +64,6 @@
             </div>
             <div class="input-actions">
                 <button type="submit" class="primary">Analyze string</button>
-                <button type="button" @onclick="Clear">Clear</button>
                 <button type="button" @onclick="CopyEscaped" disabled="@(analysis.Value.Length == 0)">Copy escaped C#</button>
             </div>
         </form>
@@ -67,7 +75,11 @@
                 <h3 id="rendered-heading">Rendered text</h3>
                 <p>What the browser displays. Whitespace and invisible code points may not be apparent here.</p>
             </div>
-            <pre tabindex="0" role="region" aria-labelledby="rendered-heading"><code>@(analysis.Value.Length == 0 ? "(empty string)" : analysis.Value)</code></pre>
+            <pre tabindex="0" role="region" aria-labelledby="rendered-heading"><code>@if (analysis.Value.Length == 0)
+                {<text>(empty string)</text>}
+                else
+                {@foreach (var element in analysis.TextElements)
+                    {<span class="rendered-element @(selectedElement == element.Index ? "selected-text" : null)">@element.Value</span>}}</code></pre>
         </section>
 
         <dl class="summary-grid" aria-label="String summary">
@@ -78,6 +90,23 @@
             <div><dt>Well-formed UTF-16</dt><dd>@(analysis.IsWellFormedUtf16 ? "Yes" : "No")</dd><span>@(analysis.IsWellFormedUtf16 ? "Every surrogate is paired" : "Contains an unpaired surrogate")</span></div>
         </dl>
 
+        @if (analysis.Warnings.Count > 0)
+        {
+            <section class="warning-panel" aria-labelledby="warnings-heading">
+                <h3 id="warnings-heading">Review these code points</h3>
+                <p>These are inspection hints, not a verdict that the text is malicious.</p>
+                <ul>
+                    @foreach (var warning in analysis.Warnings)
+                    {
+                        <li class="@(IsSelected(warning.Utf16Start, warning.Utf16Length) ? "selected-warning" : null)">
+                            <button type="button" @onclick="() => SelectAt(warning.Utf16Start)" @onfocus="() => SelectAt(warning.Utf16Start)">@warning.Kind</button>
+                            <span>@warning.Message</span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
         @if (analysis.Value.Length == 0)
         {
             <p class="empty-state">Enter text or load an example to inspect its .NET representation.</p>
@@ -86,13 +115,14 @@
         {
             <section class="result-section" aria-labelledby="elements-heading">
                 <div class="result-heading">
-                    <div><h3 id="elements-heading">Text elements <span class="count">(@analysis.TextElements.Count)</span></h3><p>Grapheme clusters reported by <code>StringInfo.ParseCombiningCharacters</code>.</p></div>
+                    <div><h3 id="elements-heading">Text elements <span class="count">(@analysis.TextElements.Count)</span></h3><p>Grapheme clusters reported by <code>StringInfo.ParseCombiningCharacters</code>. <a href="https://learn.microsoft.com/dotnet/api/system.globalization.stringinfo.parsecombiningcharacters">API reference</a></p></div>
                 </div>
+                <p class="selection-summary">@SelectionSummary</p>
                 <div class="element-strip" aria-label="Text element selector">
                     @foreach (var element in analysis.TextElements)
                     {
                         <button type="button" class="element-chip @(selectedElement == element.Index ? "selected" : null)"
-                                aria-pressed="@(selectedElement == element.Index ? "true" : "false")" @onclick="() => SelectElement(element.Index)">
+                                aria-pressed="@(selectedElement == element.Index ? "true" : "false")" @onclick="() => SelectElement(element.Index)" @onfocus="() => SelectElement(element.Index)">
                             <span class="element-visual">@element.Value</span>
                             <span>#@element.Index</span>
                         </button>
@@ -106,7 +136,7 @@
                         @foreach (var element in analysis.TextElements)
                         {
                             <tr class="@(selectedElement == element.Index ? "selected-row" : null)">
-                                <th scope="row">@element.Index</th><td class="large-glyph">@element.Value</td><td><code>@element.Escaped</code></td>
+                                <th scope="row"><button type="button" class="row-selector" aria-label="Select text element @element.Index" aria-pressed="@(selectedElement == element.Index ? "true" : "false")" @onclick="() => SelectElement(element.Index)" @onfocus="() => SelectElement(element.Index)">@element.Index<span aria-hidden="true">@(selectedElement == element.Index ? " ✓" : string.Empty)</span></button></th><td class="large-glyph">@VisibleText(element.Value)</td><td><code>@element.Escaped</code></td>
                                 <td>@element.Utf16Start..@(element.Utf16Start + element.Utf16Length - 1)</td><td>@element.RuneCount</td>
                             </tr>
                         }
@@ -117,7 +147,7 @@
 
             <section class="result-section" aria-labelledby="runes-heading">
                 <div class="result-heading">
-                    <div><h3 id="runes-heading">Unicode scalar values <span class="count">(@analysis.Runes.Count)</span></h3><p><code>Rune</code> values enumerate code points without splitting surrogate pairs.</p></div>
+                    <div><h3 id="runes-heading">Unicode scalar values <span class="count">(@analysis.Runes.Count)</span></h3><p><code>Rune</code> values enumerate code points without splitting surrogate pairs. <a href="https://learn.microsoft.com/dotnet/api/system.text.rune">API reference</a></p></div>
                 </div>
                 <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="runes-caption">
                     <table>
@@ -127,7 +157,7 @@
                         @foreach (var rune in analysis.Runes)
                         {
                             <tr class="@(IsSelected(rune.Utf16Start, rune.Utf16Length) ? "selected-row" : null)">
-                                <th scope="row">@rune.Index</th><td class="large-glyph">@rune.Value</td><td><code>@rune.CodePoint</code></td>
+                                <th scope="row"><button type="button" class="row-selector" aria-label="Select rune @rune.Index, @rune.CodePoint" aria-pressed="@(IsSelected(rune.Utf16Start, rune.Utf16Length) ? "true" : "false")" @onclick="() => SelectAt(rune.Utf16Start)" @onfocus="() => SelectAt(rune.Utf16Start)">@rune.Index<span aria-hidden="true">@(IsSelected(rune.Utf16Start, rune.Utf16Length) ? " ✓" : string.Empty)</span></button></th><td class="large-glyph">@VisibleText(rune.Value)</td><td><code>@rune.CodePoint</code></td>
                                 <td>@SplitPascalCase(rune.Category.ToString())</td><td>@rune.Utf16Start + @rune.Utf16Length</td><td><code>@rune.Utf8Hex</code></td>
                             </tr>
                         }
@@ -138,7 +168,7 @@
 
             <section class="result-section" aria-labelledby="code-units-heading">
                 <div class="result-heading">
-                    <div><h3 id="code-units-heading">UTF-16 code units <span class="count">(@analysis.CodeUnits.Count)</span></h3><p>Every position addressable by a .NET <code>string</code> index or <code>char</code>.</p></div>
+                    <div><h3 id="code-units-heading">UTF-16 code units <span class="count">(@analysis.CodeUnits.Count)</span></h3><p>Every position addressable by a .NET <code>string</code> index or <code>char</code>. <a href="https://learn.microsoft.com/dotnet/standard/base-types/character-encoding-introduction">Encoding concepts</a></p></div>
                 </div>
                 <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="code-units-caption">
                     <table>
@@ -148,7 +178,7 @@
                         @foreach (var unit in analysis.CodeUnits)
                         {
                             <tr class="@(IsSelected(unit.Index, 1) ? "selected-row" : null)">
-                                <th scope="row">@unit.Index</th><td class="large-glyph">@unit.Display</td><td><code>@unit.Escaped</code></td><td><code>@unit.Hex</code></td><td>@unit.Kind</td>
+                                <th scope="row"><button type="button" class="row-selector" aria-label="Select UTF-16 code unit @unit.Index" aria-pressed="@(IsSelected(unit.Index, 1) ? "true" : "false")" @onclick="() => SelectAt(unit.Index)" @onfocus="() => SelectAt(unit.Index)">@unit.Index<span aria-hidden="true">@(IsSelected(unit.Index, 1) ? " ✓" : string.Empty)</span></button></th><td class="large-glyph">@unit.Display</td><td><code>@unit.Escaped</code></td><td><code>@unit.Hex</code></td><td>@unit.Kind</td>
                             </tr>
                         }
                         </tbody>
@@ -166,7 +196,15 @@
                     {
                         <article class="encoding-card">
                             <div><h4>@encoding.Name</h4><span>@encoding.ByteCount bytes</span></div>
-                            <code>@encoding.Hex</code>
+                            <div class="byte-strip" aria-label="@encoding.Name byte selector">
+                                @foreach (var value in encoding.Bytes)
+                                {
+                                    <button type="button" class="byte-chip @(IsSelected(value.Utf16Start, value.Utf16Length) ? "selected" : null)"
+                                            aria-label="Select @encoding.Name byte @value.Index, hexadecimal @value.Hex"
+                                            aria-pressed="@(IsSelected(value.Utf16Start, value.Utf16Length) ? "true" : "false")"
+                                            @onclick="() => SelectAt(value.Utf16Start)" @onfocus="() => SelectAt(value.Utf16Start)">@value.Hex</button>
+                                }
+                            </div>
                             <button type="button" @onclick="() => CopyEncoding(encoding)">Copy <span class="visually-hidden">@encoding.Name bytes</span></button>
                         </article>
                     }
@@ -248,6 +286,7 @@
 
 @code {
     private sealed record Example(string Key, string Label, string Value, bool Escaped = false);
+    private sealed record StoredState(int Version, string Input, bool EscapedMode, string SelectedExample);
 
     private static readonly Example[] Examples =
     [
@@ -258,7 +297,11 @@
         new("skin-tone", "Emoji with skin tone", "👍🏽"),
         new("devanagari", "Devanagari conjunct", "नमस्ते"),
         new("compatibility", "Compatibility forms", "① Ⅳ ﬁ Ａ"),
-        new("whitespace", "Whitespace and controls", @"first\tsecond\nthird", true)
+        new("whitespace", "Whitespace and controls", @"first\tsecond\nthird", true),
+        new("invisible", "Invisible zero-width characters", @"user\u200Bname\u2060", true),
+        new("bidi", "Bidirectional override in a filename", @"invoice\u202Ecod.exe", true),
+        new("confusable", "Mixed-script confusable letters", "paypal | раypal"),
+        new("invalid", "Unpaired UTF-16 surrogate", @"before\uD800after", true)
     ];
 
     private string input = Examples[0].Value;
@@ -269,11 +312,16 @@
     private bool submitted;
     private string copyStatus = string.Empty;
     private int selectedElement;
+    private bool rememberOnDevice;
+    private bool browserInitialized;
     private UnicodeAnalysis analysis = UnicodeAnalyzer.Analyze("Café | Cafe\u0301");
 
     private bool showError => parseError is not null && (hasBlurred || submitted);
     private int Utf8ByteCount => analysis.Encodings.FirstOrDefault(item => item.Name == "UTF-8")?.ByteCount ?? 0;
     private TextElementInfo? SelectedTextElement => analysis.TextElements.ElementAtOrDefault(selectedElement);
+    private string SelectionSummary => SelectedTextElement is { } selected
+        ? $"Selected text element {selected.Index}: UTF-16 {selected.Utf16Start}..{selected.Utf16Start + selected.Utf16Length - 1}, {selected.RuneCount} rune{(selected.RuneCount == 1 ? string.Empty : "s")}. Related rows and bytes are highlighted."
+        : "No text element selected.";
     private string CodeSnippet => $$"""
         using System.Globalization;
         using System.Text;
@@ -292,6 +340,20 @@
 
     protected override void OnInitialized() => Reanalyze();
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || browserInitialized) return;
+        browserInitialized = true;
+        await SafeInvokeVoid("unicodeUi.attachAnalyzeShortcut", "string-input");
+        var shared = await SafeInvokeString("unicodeUi.readSharedState");
+        if (!TryRestoreState(shared))
+        {
+            var stored = await SafeInvokeString("unicodeUi.readStoredState");
+            if (TryRestoreState(stored)) rememberOnDevice = true;
+        }
+        StateHasChanged();
+    }
+
     private void InputChanged(ChangeEventArgs args)
     {
         input = args.Value?.ToString() ?? string.Empty;
@@ -300,32 +362,39 @@
         Reanalyze();
     }
 
-    private void InputBlurred() => hasBlurred = true;
+    private async Task InputBlurred()
+    {
+        hasBlurred = true;
+        await SaveIfRemembered();
+    }
 
-    private void AnalyzeSubmitted()
+    private async Task AnalyzeSubmitted()
     {
         submitted = true;
         hasBlurred = true;
         Reanalyze();
+        await SaveIfRemembered();
     }
 
-    private void UseTextMode()
+    private async Task UseTextMode()
     {
         escapedMode = false;
         input = analysis.Value;
         ResetInteraction();
         Reanalyze();
+        await SaveIfRemembered();
     }
 
-    private void UseEscapedMode()
+    private async Task UseEscapedMode()
     {
         escapedMode = true;
         input = analysis.Escaped;
         ResetInteraction();
         Reanalyze();
+        await SaveIfRemembered();
     }
 
-    private void LoadExample(ChangeEventArgs args)
+    private async Task LoadExample(ChangeEventArgs args)
     {
         var key = args.Value?.ToString() ?? Examples[0].Key;
         var example = Examples.First(item => item.Key == key);
@@ -334,14 +403,18 @@
         escapedMode = example.Escaped;
         ResetInteraction();
         Reanalyze();
+        await SaveIfRemembered();
     }
 
-    private void Clear()
+    private async Task Reset()
     {
-        input = string.Empty;
-        selectedExample = string.Empty;
+        input = Examples[0].Value;
+        escapedMode = Examples[0].Escaped;
+        selectedExample = Examples[0].Key;
         ResetInteraction();
         Reanalyze();
+        await SafeInvokeVoid("unicodeUi.clearShareState");
+        await SaveIfRemembered();
     }
 
     private void ResetInteraction()
@@ -365,6 +438,13 @@
 
     private void SelectElement(int index) => selectedElement = index;
 
+    private void SelectAt(int utf16Start)
+    {
+        var match = analysis.TextElements.FirstOrDefault(item =>
+            utf16Start >= item.Utf16Start && utf16Start < item.Utf16Start + item.Utf16Length);
+        if (match is not null) selectedElement = match.Index;
+    }
+
     private bool IsSelected(int start, int length)
     {
         var selected = SelectedTextElement;
@@ -378,6 +458,86 @@
     private async Task CopyEncoding(DotNetUnicodeExplorer.Core.EncodingInfo encoding) => await Copy(encoding.Hex, $"{encoding.Name} bytes");
     private async Task CopyNormalization(NormalizationInfo form) => await Copy(form.Escaped, $"{form.ShortName} escaped value");
     private async Task CopyCode() => await Copy(CodeSnippet, "C# example");
+    private async Task CopyResult() => await Copy(AnalysisText, "analysis result");
+
+    private async Task CopyShareLink()
+    {
+        var result = await SafeInvokeString("unicodeUi.copyShareLink", StateJson) ?? "failed";
+        copyStatus = result switch
+        {
+            "copied" => "Copied a private-by-default share link. Its state is stored after the # fragment.",
+            "too-long" => "This input is too large for a reliable share link. Shorten it and try again.",
+            _ => "Copy failed. Your browser may have denied clipboard access."
+        };
+    }
+
+    private async Task RememberChanged(ChangeEventArgs args)
+    {
+        rememberOnDevice = args.Value is true;
+        if (rememberOnDevice)
+        {
+            await SafeInvokeVoid("unicodeUi.writeStoredState", StateJson);
+            copyStatus = "This input will be remembered only in this browser. Avoid saving secrets.";
+        }
+        else
+        {
+            await SafeInvokeVoid("unicodeUi.forgetStoredState");
+            copyStatus = "Saved work removed from this browser.";
+        }
+    }
+
+    private async Task ForgetSavedWork()
+    {
+        rememberOnDevice = false;
+        await SafeInvokeVoid("unicodeUi.forgetStoredState");
+        copyStatus = "Saved work removed from this browser.";
+    }
+
+    private async Task SaveIfRemembered()
+    {
+        if (rememberOnDevice) await SafeInvokeVoid("unicodeUi.writeStoredState", StateJson);
+    }
+
+    private string StateJson => System.Text.Json.JsonSerializer.Serialize(new StoredState(1, input, escapedMode, selectedExample));
+
+    private bool TryRestoreState(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json.Length > 12_000) return false;
+        try
+        {
+            var state = System.Text.Json.JsonSerializer.Deserialize<StoredState>(json);
+            if (state is null || state.Version != 1 || state.Input is null || state.Input.Length > 4096) return false;
+            input = state.Input;
+            escapedMode = state.EscapedMode;
+            selectedExample = Examples.Any(item => item.Key == state.SelectedExample) ? state.SelectedExample : string.Empty;
+            ResetInteraction();
+            Reanalyze();
+            return true;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    private string AnalysisText
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                $"Value: \"{analysis.Escaped}\"",
+                $"UTF-16 code units: {analysis.Value.Length}",
+                $"Text elements: {analysis.TextElements.Count}",
+                $"Runes: {analysis.Runes.Count}",
+                $"UTF-8 bytes: {Utf8ByteCount}",
+                $"Well-formed UTF-16: {(analysis.IsWellFormedUtf16 ? "Yes" : "No")}"
+            };
+            lines.AddRange(analysis.Runes.Select(item => $"Rune {item.Index}: {item.CodePoint}, {SplitPascalCase(item.Category.ToString())}, UTF-16 {item.Utf16Start}+{item.Utf16Length}, UTF-8 {item.Utf8Hex}"));
+            lines.AddRange(analysis.Warnings.Select(item => $"Warning — {item.Kind}: {item.Message}"));
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
 
     private async Task Copy(string text, string label)
     {
@@ -393,4 +553,37 @@
     }
 
     private static string SplitPascalCase(string value) => string.Concat(value.Select((character, index) => index > 0 && char.IsUpper(character) ? $" {character}" : character.ToString()));
+
+    private static string VisibleText(string value)
+    {
+        if (value.Length == 0) return "∅";
+        var runes = value.EnumerateRunes().ToArray();
+        if (runes.All(rune => Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format))
+            return $"⟦{string.Join(", ", runes.Select(rune => UnicodeAnalyzer.InvisibleName(rune.Value)))}⟧";
+        return value;
+    }
+
+    private async Task SafeInvokeVoid(string identifier, params object?[] args)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSException)
+        {
+            copyStatus = "Browser storage or clipboard access is unavailable.";
+        }
+    }
+
+    private async Task<string?> SafeInvokeString(string identifier, params object?[] args)
+    {
+        try
+        {
+            return await JS.InvokeAsync<string?>(identifier, args);
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+    }
 }

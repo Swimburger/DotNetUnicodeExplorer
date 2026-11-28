@@ -29,6 +29,42 @@ public sealed class UnicodeAnalyzerTests
     }
 
     [Fact]
+    public void EncodedBytesMapBackToTheirTextElement()
+    {
+        var result = UnicodeAnalyzer.Analyze("A🥰");
+        var utf8 = Assert.Single(result.Encodings, item => item.Name == "UTF-8");
+
+        Assert.Equal(5, utf8.Bytes.Count);
+        Assert.Equal(0, utf8.Bytes[0].Utf16Start);
+        Assert.All(utf8.Bytes.Skip(1), item =>
+        {
+            Assert.Equal(1, item.Utf16Start);
+            Assert.Equal(2, item.Utf16Length);
+        });
+    }
+
+    [Theory]
+    [InlineData(@"abc\u202Etxt", "Bidirectional control")]
+    [InlineData(@"user\u200Bname", "Invisible character")]
+    [InlineData(@"before\uD800after", "Invalid UTF-16")]
+    public void FlagsInvisibleAndInvalidInput(string escaped, string warningKind)
+    {
+        var parsed = UnicodeAnalyzer.ParseEscaped(escaped);
+        var result = UnicodeAnalyzer.Analyze(parsed.Value);
+
+        Assert.Contains(result.Warnings, item => item.Kind == warningKind);
+    }
+
+    [Fact]
+    public void MixedLatinAndCyrillicIsOnlyAReviewHint()
+    {
+        var result = UnicodeAnalyzer.Analyze("paypal раypal");
+
+        var warning = Assert.Single(result.Warnings, item => item.Kind == "Potentially confusable text");
+        Assert.Contains("not proof", warning.Message);
+    }
+
+    [Fact]
     public void NormalizationShowsEquivalentAccentRepresentations()
     {
         var result = UnicodeAnalyzer.Analyze("e\u0301");
